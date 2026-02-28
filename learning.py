@@ -47,12 +47,18 @@ KEYPOINT_NAMES = [
     "left_foot_index", "right_foot_index"
 ]
 
-def extract_landmarks(frame_index, fps, landmark_results):
+def extract_landmarks(frame_index, fps, landmark_results, frame_height, frame_width):
     landmarks_dict = {}
-    for landmark_idx, landmark in enumerate(landmark_results):    
+    for landmark_idx, landmark in enumerate(landmark_results): 
+        x_normalized = landmark.x
+        y_normalized = landmark.y
+
+        x_pixel = x_normalized * frame_width
+        y_pixel = y_normalized * frame_height
+
         landmarks_dict[KEYPOINT_NAMES[landmark_idx]] = {
-            "x_pixel": landmark.x,
-            "y_pixel": landmark.y,
+            "x_pixel": x_pixel,
+            "y_pixel": y_pixel,
             "z_pixel": landmark.z, # Z = depth
             "visibility": landmark.visibility
         }
@@ -79,7 +85,7 @@ options = vision.PoseLandmarkerOptions(
 detector = vision.PoseLandmarker.create_from_options(options)
 
 # Load input Frame using openCV
-cap = cv2.VideoCapture("input_video.mp4")
+cap = cv2.VideoCapture("volleyball_input.mp4")
 frame_index = 0
 all_landmark_frames = []
 fps = cap.get(cv2.CAP_PROP_FPS)
@@ -103,19 +109,14 @@ while True:
 
     # Extract landmark data
     if detection_results.pose_landmarks:
-        # landmarks_data = extract_landmarks(frame_index, fps, detection_results.pose_landmarks)
-        # all_landmark_frames.append(landmarks_data)
-        for pose_idx, landmarks in enumerate(detection_results.pose_landmarks):
-            for lm_idx, lm in enumerate(landmarks):
-                    x_norm = lm.x          # 0..1
-                    y_norm = lm.y          # 0..1
-                    z_norm = lm.z          # depth (hip-midpoint origin, normalized scale)
-
-                    px = x_norm * frame_width
-                    py = y_norm * frame_height
-                    print(f"Pose Index: {pose_idx}\n")
-                    print(f"Landmark Index: {lm_idx}\n")
-                    print(f"X: {px} Y: {py}\n")
+        # pose_landmarks is a list of detected poses for THIS frame.
+        # frame_index is a video frame counter, not a pose index.
+        for pose_landmarks in detection_results.pose_landmarks:
+            frame_data = extract_landmarks(
+                frame_index, fps, pose_landmarks, frame_height, frame_width
+            )
+            all_landmark_frames.append(frame_data)
+            print(frame_data["landmarks"]["nose"])
 
     frame_index += 1
 
@@ -140,6 +141,5 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
-
 
 
