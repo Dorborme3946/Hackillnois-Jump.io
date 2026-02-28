@@ -55,6 +55,16 @@ phase_state = "approach"
 prev_avg_hip_flexion = None
 loading_min_hip_flexion = None
 smallest_loading_min_hip_flexion = None
+smallest_loading_min_knee_flexion = None
+largest_loading_max_knee_flexion = None
+largest_loading_max_shoulder_angle = None
+loading_max_shoulder_timestamp = None
+largest_takeoff_max_shoulder_angle = None
+takeoff_max_shoulder_timestamp = None
+analysis_side = None
+side_locked = False
+left_shoulder_valid_count = 0
+right_shoulder_valid_count = 0
 dramatic_increase_deg = 6.0
 rebound_margin_deg = 4.0
 
@@ -121,18 +131,69 @@ while True:
 
         # Phase Segmentation
         hip_flexion_values = [value for value in [right_angles["hip_flexion"], left_angles["hip_flexion"]] if value is not None]
+        knee_flexion_values = [value for value in [right_angles["knee_flexion"], left_angles["knee_flexion"]] if value is not None]
+        current_left_shoulder_angle = left_angles["shoulder_angle"]
+        current_right_shoulder_angle = right_angles["shoulder_angle"]
+
+        if current_left_shoulder_angle is not None:
+            left_shoulder_valid_count += 1
+        if current_right_shoulder_angle is not None:
+            right_shoulder_valid_count += 1
+
+        if not side_locked:
+            if current_left_shoulder_angle is not None and current_right_shoulder_angle is None:
+                analysis_side = "left"
+            elif current_right_shoulder_angle is not None and current_left_shoulder_angle is None:
+                analysis_side = "right"
+            elif current_left_shoulder_angle is not None and current_right_shoulder_angle is not None:
+                analysis_side = "left" if left_shoulder_valid_count >= right_shoulder_valid_count else "right"
+
+        selected_shoulder_angle = None
+        if analysis_side == "left":
+            selected_shoulder_angle = current_left_shoulder_angle
+        elif analysis_side == "right":
+            selected_shoulder_angle = current_right_shoulder_angle
+        elif current_left_shoulder_angle is not None:
+            selected_shoulder_angle = current_left_shoulder_angle
+        elif current_right_shoulder_angle is not None:
+            selected_shoulder_angle = current_right_shoulder_angle
+
         if hip_flexion_values:
             avg_hip_flexion = sum(hip_flexion_values) / len(hip_flexion_values)
+            current_knee_flexion = min(knee_flexion_values) if knee_flexion_values else None
 
+            # Calculating average hip flexion during loading phase
             if prev_avg_hip_flexion is None:
                 phase_state = "loading" if avg_hip_flexion <= 90 else "approach"
                 if phase_state == "loading":
                     loading_min_hip_flexion = avg_hip_flexion
+                    # Finding Minimum Hip Flexion during loading phase logic
                     if (
                         smallest_loading_min_hip_flexion is None
                         or loading_min_hip_flexion < smallest_loading_min_hip_flexion
                     ):
                         smallest_loading_min_hip_flexion = loading_min_hip_flexion
+
+                    # Finding Minimum Knee Flexion during loading phase logic
+                    if (
+                        current_knee_flexion is not None
+                        and (
+                            smallest_loading_min_knee_flexion is None
+                            or current_knee_flexion < smallest_loading_min_knee_flexion
+                        )
+                    ):
+                        smallest_loading_min_knee_flexion = current_knee_flexion
+
+                    # Finding Maximum Knee Flexion during loading phase logic
+                    if (
+                        current_knee_flexion is not None
+                        and (
+                            largest_loading_max_knee_flexion is None
+                            or current_knee_flexion > largest_loading_max_knee_flexion
+                        )
+                    ):
+                        largest_loading_max_knee_flexion = current_knee_flexion
+
             else:
                 if phase_state == "approach" and avg_hip_flexion <= 90:
                     phase_state = "loading"
@@ -142,6 +203,22 @@ while True:
                         or loading_min_hip_flexion < smallest_loading_min_hip_flexion
                     ):
                         smallest_loading_min_hip_flexion = loading_min_hip_flexion
+                    if (
+                        current_knee_flexion is not None
+                        and (
+                            smallest_loading_min_knee_flexion is None
+                            or current_knee_flexion < smallest_loading_min_knee_flexion
+                        )
+                    ):
+                        smallest_loading_min_knee_flexion = current_knee_flexion
+                    if (
+                        current_knee_flexion is not None
+                        and (
+                            largest_loading_max_knee_flexion is None
+                            or current_knee_flexion > largest_loading_max_knee_flexion
+                        )
+                    ):
+                        largest_loading_max_knee_flexion = current_knee_flexion
                 elif phase_state == "loading":
                     if loading_min_hip_flexion is None:
                         loading_min_hip_flexion = avg_hip_flexion
@@ -152,6 +229,22 @@ while True:
                         or loading_min_hip_flexion < smallest_loading_min_hip_flexion
                     ):
                         smallest_loading_min_hip_flexion = loading_min_hip_flexion
+                    if (
+                        current_knee_flexion is not None
+                        and (
+                            smallest_loading_min_knee_flexion is None
+                            or current_knee_flexion < smallest_loading_min_knee_flexion
+                        )
+                    ):
+                        smallest_loading_min_knee_flexion = current_knee_flexion
+                    if (
+                        current_knee_flexion is not None
+                        and (
+                            largest_loading_max_knee_flexion is None
+                            or current_knee_flexion > largest_loading_max_knee_flexion
+                        )
+                    ):
+                        largest_loading_max_knee_flexion = current_knee_flexion
 
                     if (
                         avg_hip_flexion >= loading_min_hip_flexion + rebound_margin_deg
@@ -161,6 +254,25 @@ while True:
 
             prev_avg_hip_flexion = avg_hip_flexion
             phase_text = f"Jump phase: {phase_state}"
+
+            if phase_state == "loading" and not side_locked and analysis_side is not None:
+                side_locked = True
+
+            if phase_state == "loading" and selected_shoulder_angle is not None:
+                if (
+                    largest_loading_max_shoulder_angle is None
+                    or selected_shoulder_angle > largest_loading_max_shoulder_angle
+                ):
+                    largest_loading_max_shoulder_angle = selected_shoulder_angle
+                    loading_max_shoulder_timestamp = primary_frame_data["timestamp"]
+
+            if phase_state == "takeoff" and selected_shoulder_angle is not None:
+                if (
+                    largest_takeoff_max_shoulder_angle is None
+                    or selected_shoulder_angle > largest_takeoff_max_shoulder_angle
+                ):
+                    largest_takeoff_max_shoulder_angle = selected_shoulder_angle
+                    takeoff_max_shoulder_timestamp = primary_frame_data["timestamp"]
 
     cv2.putText(
         annotated_frame_BGR,
@@ -192,8 +304,89 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 
+
+
 # Debugging: checking minimum hip flexion
 if smallest_loading_min_hip_flexion is not None:
     print(f"Smallest loading_min_hip_flexion detected: {smallest_loading_min_hip_flexion:.1f}")
+    hip_normalized_score = max(0.0, 100.0 - abs(smallest_loading_min_hip_flexion - 70.0)) # Data to send
+    # smallest_loading_min_hip_flexion # Data to send
+    ideal_min_hip_flexion = 68.0
+    ideal_max_hip_flexion = 72.0
+
+    if ideal_min_hip_flexion <= smallest_loading_min_hip_flexion <= ideal_max_hip_flexion:
+        hip_flexion_feedback = "hip flexion is in the ideal range"
+    elif smallest_loading_min_hip_flexion > ideal_max_hip_flexion:
+        hip_flexion_feedback = "lower your hip flexion angle by lowering your torso, you need more force"
+    else:
+        hip_flexion_feedback = "dont go too low for flexion angle"
+
+    print(f"Hip flexion feedback: {hip_flexion_feedback}")
+    print(f"Hip flexion normalized score: {hip_normalized_score:.1f}/100")
+
+# Debug
 else:
     print("Smallest loading_min_hip_flexion detected: not detected!")
+    print("Hip flexion feedback: not detected!")
+    print("Hip flexion normalized score: not detected!")
+
+if smallest_loading_min_knee_flexion is not None:
+    print(f"The minimum knee flexion angle during loading: {smallest_loading_min_knee_flexion:.1f}")
+    knee_ideal_min = 83.0
+    knee_ideal_max = 90.0
+    knee_distance_from_range = max(
+        knee_ideal_min - smallest_loading_min_knee_flexion,
+        smallest_loading_min_knee_flexion - knee_ideal_max,
+        0.0,
+    )
+    knee_normalized_score = max(0.0, 100.0 - knee_distance_from_range) # Data to send
+    # smallest_loading_min_knee_flexion # Data to send
+
+    if smallest_loading_min_knee_flexion < knee_ideal_min:
+        knee_feedback = "Knees are going too low, you are wasting elastic energy"
+    elif smallest_loading_min_knee_flexion > knee_ideal_max:
+        knee_feedback = "Knees are not going low enough, you are limiting the force production you can get from your legs"
+    else:
+        knee_feedback = "Knee flexion is in the ideal range"
+
+    print(f"Knee flexion feedback: {knee_feedback}")
+    print(f"Knee flexion normalized score: {knee_normalized_score:.1f}/100")
+
+# Debug
+else:
+    print("The minimum knee flexion angle during loading: not detected!")
+    print("Knee flexion feedback: not detected!")
+    print("Knee flexion normalized score: not detected!")
+
+if largest_loading_max_shoulder_angle is not None:
+    print(f"Analysis side used: {analysis_side if analysis_side is not None else 'not detected'}")
+    print(f"The maximum shoulder angle during loading: {largest_loading_max_shoulder_angle:.1f}")
+    print(f"The maximum shoulder angle during takeoff: {largest_takeoff_max_shoulder_angle:.1f}")
+    shoulder_normalized_score = max(0.0, 100.0 - abs(largest_loading_max_shoulder_angle - 90.0))
+    print(f"Shoulder angle normalized score: {shoulder_normalized_score:.1f}/100")
+
+# Debug
+else:
+    print(f"Analysis side used: {analysis_side if analysis_side is not None else 'not detected'}")
+    print("The maximum shoulder angle during loading: not detected!")
+    print("Shoulder angle normalized score: not detected!")
+
+if (
+    largest_loading_max_shoulder_angle is not None
+    and largest_takeoff_max_shoulder_angle is not None
+    and loading_max_shoulder_timestamp is not None
+    and takeoff_max_shoulder_timestamp is not None
+):
+    delta_angle = largest_takeoff_max_shoulder_angle - largest_loading_max_shoulder_angle
+    delta_time = takeoff_max_shoulder_timestamp - loading_max_shoulder_timestamp
+    if delta_time > 0:
+        angular_velocity = int(delta_angle / delta_time) # Data to send
+        print(f"Arm swing angular velocity (deg/s): {angular_velocity:.2f}")
+        angular_velocity_score = max(0.0, min(100.0, (angular_velocity / 300.0) * 100.0)) # Data to send, maximum of 500
+        print(f"Arm swing angular velocity score: {angular_velocity_score:.1f}/100")
+    else:
+        print("Arm swing angular velocity (deg/s): not detected!")
+        print("Arm swing angular velocity score: not detected!")
+else:
+    print("Arm swing angular velocity (deg/s): not detected!")
+    print("Arm swing angular velocity score: not detected!")

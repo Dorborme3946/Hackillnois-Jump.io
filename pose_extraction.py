@@ -68,11 +68,13 @@ def extract_landmarks(frame_index, fps, landmark_results, frame_height, frame_wi
             "knee_flexion": calculate_joint_angle("left_hip", "left_knee", "left_ankle"),
             "hip_flexion": calculate_joint_angle("left_shoulder", "left_hip", "left_knee"),
             "ankle_angle": calculate_joint_angle("left_knee", "left_ankle", "left_foot_index"),
+            "shoulder_angle": calculate_joint_angle("left_hip", "left_shoulder", "left_elbow"),
         },
         "right": {
             "knee_flexion": calculate_joint_angle("right_hip", "right_knee", "right_ankle"),
             "hip_flexion": calculate_joint_angle("right_shoulder", "right_hip", "right_knee"),
             "ankle_angle": calculate_joint_angle("right_knee", "right_ankle", "right_foot_index"),
+            "shoulder_angle": calculate_joint_angle("right_hip", "right_shoulder", "right_elbow"),
         },
     }
 
