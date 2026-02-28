@@ -76,6 +76,8 @@ angle_lines = [
         "Left hip flexion: not detected!",
         "Right ankle_angle: not detected!",
         "Left ankle_angle: not detected!",
+        "Right shoulder angle: not detected!",
+        "Left shoulder angle: not detected!",
     ]
 
 while True:
@@ -127,6 +129,8 @@ while True:
             f"Left hip flexion: {left_angles['hip_flexion']:.1f}" if left_angles["hip_flexion"] is not None else "Left hip flexion: not detected!",
             f"Right ankle_angle: {right_angles['ankle_angle']:.1f}" if right_angles["ankle_angle"] is not None else "Right ankle_angle: not detected!",
             f"Left ankle_angle: {left_angles['ankle_angle']:.1f}" if left_angles["ankle_angle"] is not None else "Left ankle_angle: not detected!",
+            f"Right shoulder angle: {right_angles['shoulder_angle']:.1f}" if right_angles["shoulder_angle"] is not None else "Right shoulder angle: not detected!",
+            f"Left shoulder angle: {left_angles['shoulder_angle']:.1f}" if left_angles["shoulder_angle"] is not None else "Left shoulder angle: not detected!",
         ]
 
         # Phase Segmentation
