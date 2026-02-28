@@ -51,6 +51,22 @@ all_landmark_frames = []
 fps = cap.get(cv2.CAP_PROP_FPS)
 if (fps == 0 or fps == None):
     fps = 30
+phase_state = "approach"
+prev_avg_hip_flexion = None
+loading_min_hip_flexion = None
+smallest_loading_min_hip_flexion = None
+dramatic_increase_deg = 6.0
+rebound_margin_deg = 4.0
+
+# Default Angle Readings
+angle_lines = [
+        "Right knee flexion: not detected!",
+        "Left knee flexion: not detected!",
+        "Right hip flexion: not detected!",
+        "Left hip flexion: not detected!",
+        "Right ankle_angle: not detected!",
+        "Left ankle_angle: not detected!",
+    ]
 
 while True:
     ret, frame = cap.read()
@@ -81,25 +97,19 @@ while True:
 
     frame_index += 1
 
-    ## Calculate angle between left_shoulder, left_elbow, and left_wrist
-
     # Annotate the detected landmarks on the original Frame
     annotated_frame = draw_landmarks_on_image(frame_rgb, detection_results)
-
     annotated_frame_BGR = cv2.cvtColor(annotated_frame, cv2.COLOR_RGB2BGR)
-    angle_lines = [
-        "Right knee flexion: not detected!",
-        "Left knee flexion: not detected!",
-        "Right hip flexion: not detected!",
-        "Left hip flexion: not detected!",
-        "Right ankle_angle: not detected!",
-        "Left ankle_angle: not detected!",
-    ]
+
+    # Default Jump Phase State
+    phase_text = "Jump phase: not detected!"
+    
     if primary_frame_data is not None:
         angles = primary_frame_data["landmarks"]["angles"]
         right_angles = angles["right"]
         left_angles = angles["left"]
 
+        # Reading the angles
         angle_lines = [
             f"Right knee flexion: {right_angles['knee_flexion']:.1f}" if right_angles["knee_flexion"] is not None else "Right knee flexion: not detected!",
             f"Left knee flexion: {left_angles['knee_flexion']:.1f}" if left_angles["knee_flexion"] is not None else "Left knee flexion: not detected!",
@@ -109,11 +119,65 @@ while True:
             f"Left ankle_angle: {left_angles['ankle_angle']:.1f}" if left_angles["ankle_angle"] is not None else "Left ankle_angle: not detected!",
         ]
 
+        # Phase Segmentation
+        hip_flexion_values = [value for value in [right_angles["hip_flexion"], left_angles["hip_flexion"]] if value is not None]
+        if hip_flexion_values:
+            avg_hip_flexion = sum(hip_flexion_values) / len(hip_flexion_values)
+
+            if prev_avg_hip_flexion is None:
+                phase_state = "loading" if avg_hip_flexion <= 90 else "approach"
+                if phase_state == "loading":
+                    loading_min_hip_flexion = avg_hip_flexion
+                    if (
+                        smallest_loading_min_hip_flexion is None
+                        or loading_min_hip_flexion < smallest_loading_min_hip_flexion
+                    ):
+                        smallest_loading_min_hip_flexion = loading_min_hip_flexion
+            else:
+                if phase_state == "approach" and avg_hip_flexion <= 90:
+                    phase_state = "loading"
+                    loading_min_hip_flexion = avg_hip_flexion
+                    if (
+                        smallest_loading_min_hip_flexion is None
+                        or loading_min_hip_flexion < smallest_loading_min_hip_flexion
+                    ):
+                        smallest_loading_min_hip_flexion = loading_min_hip_flexion
+                elif phase_state == "loading":
+                    if loading_min_hip_flexion is None:
+                        loading_min_hip_flexion = avg_hip_flexion
+                    else:
+                        loading_min_hip_flexion = min(loading_min_hip_flexion, avg_hip_flexion)
+                    if (
+                        smallest_loading_min_hip_flexion is None
+                        or loading_min_hip_flexion < smallest_loading_min_hip_flexion
+                    ):
+                        smallest_loading_min_hip_flexion = loading_min_hip_flexion
+
+                    if (
+                        avg_hip_flexion >= loading_min_hip_flexion + rebound_margin_deg
+                        and (avg_hip_flexion - prev_avg_hip_flexion) >= dramatic_increase_deg
+                    ):
+                        phase_state = "takeoff"
+
+            prev_avg_hip_flexion = avg_hip_flexion
+            phase_text = f"Jump phase: {phase_state}"
+
+    cv2.putText(
+        annotated_frame_BGR,
+        phase_text,
+        (10, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (0, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+
     for idx, text in enumerate(angle_lines):
         cv2.putText(
             annotated_frame_BGR,
             text,
-            (10, 30 + idx * 25),
+            (10, 60 + idx * 25),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
             (255, 255, 255),
@@ -127,3 +191,9 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
+
+# Debugging: checking minimum hip flexion
+if smallest_loading_min_hip_flexion is not None:
+    print(f"Smallest loading_min_hip_flexion detected: {smallest_loading_min_hip_flexion:.1f}")
+else:
+    print("Smallest loading_min_hip_flexion detected: not detected!")
